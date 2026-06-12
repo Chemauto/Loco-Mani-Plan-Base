@@ -44,7 +44,7 @@ git clone https://github.com/your-username/Loco-Mani-Plan-Base.git
 cd Loco-Mani-Plan-Base
 
 # Create conda environment
-conda create -n lmp python=3.10 -y
+conda create -n lmp python=3.11 -y
 conda activate lmp
 
 # Install dependencies

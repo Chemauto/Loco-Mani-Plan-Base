@@ -1,0 +1,11 @@
+# Core
+pyyaml>=6.0
+
+# MuJoCo Simulation
+mujoco>=3.0.0
+
+# Isaac Lab Simulation (install separately, see https://isaac-sim.github.io/IsaacLab/)
+# isaaclab
+
+# Manipulation - VLA (install separately, see https://github.com/huggingface/lerobot)
+# lerobot

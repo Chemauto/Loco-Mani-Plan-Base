@@ -43,7 +43,7 @@ git clone https://github.com/your-username/Loco-Mani-Plan-Base.git
 cd Loco-Mani-Plan-Base
 
 # 创建 conda 环境
-conda create -n lmp python=3.10 -y
+conda create -n lmp python=3.11 -y
 conda activate lmp
 
 # 安装依赖
