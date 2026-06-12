@@ -1,2 +1,5 @@
 robot:
   model_path: ../../assets/So101/mjcf/scene.xml
+
+sim:
+  render_fps: 60
