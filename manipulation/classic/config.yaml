@@ -1,0 +1,21 @@
+robot:
+  model_path: ../../robots/assets/So101/mjcf/scene.xml
+
+ik:
+  method: numerical  # numerical 或 analytical
+  ee_body: gripper    # 末端执行器对应的 body 名称
+
+analytical:
+  l1: 0.1159         # 上臂有效长度 (m)
+  l2: 0.1350         # 前臂有效长度 (m)
+
+numerical:
+  max_iter: 100
+  damping: 0.01
+  tolerance: 0.001
+
+controller:
+  ee_step: 0.005     # 末端执行器步进 (m)
+
+sim:
+  render_fps: 60
