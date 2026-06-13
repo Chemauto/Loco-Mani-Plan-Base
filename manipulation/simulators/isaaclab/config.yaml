@@ -19,7 +19,9 @@ so101_grasp:
   reward:
     reach_weight: -2.0
     lift_weight: 8.0
+    grasp_weight: 2.0           # 夹爪指接触 cube 的密集奖励（reach->lift 之间的桥）
     success_bonus: 5.0
     action_rate_weight: -0.01
+    contact_force_threshold: 0.3  # N，接触力超过该值才算"碰到"；cube 仅 50g 实测接触 ~0.5N，可调
   success:
     height_threshold: 0.08

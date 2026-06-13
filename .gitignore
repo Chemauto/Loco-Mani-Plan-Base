@@ -9,6 +9,10 @@ __pycache__/
 data/
 ckpt/
 
+# 训练日志与输出（TensorBoard event、checkpoints 落盘目录等）
+logs/
+events.out.tfevents.*
+
 # 编辑器
 .vscode/
 .idea/
