@@ -1,0 +1,25 @@
+so101_grasp:
+  scene:
+    num_envs: 1024
+    env_spacing: 1.2
+  robot:
+    urdf_path: ../../../robots/assets/So101/urdf/so101_new_calib.urdf
+    mjcf_path: ../../../robots/assets/So101/mjcf/so101_new_calib.xml
+  table:
+    size: [0.45, 0.60, 0.04]
+    pos: [0.16, 0.0, 0.255]
+  cube:
+    size: 0.035
+    mass: 0.05
+    initial_pos: [0.18, 0.0, 0.2975]
+  episode:
+    length_s: 6.0
+    decimation: 2
+    sim_dt: 0.01
+  reward:
+    reach_weight: -2.0
+    lift_weight: 8.0
+    success_bonus: 5.0
+    action_rate_weight: -0.01
+  success:
+    height_threshold: 0.08
