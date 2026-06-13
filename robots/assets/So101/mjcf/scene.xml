@@ -20,5 +20,10 @@
     <worldbody>
         <light pos="0 0 3.5" dir="0 0 -1" directional="true" />
         <geom name="floor" size="0 0 0.05" pos="0 0 0" type="plane" material="groundplane" />
+        <camera name="agentview" pos="0.5 0 0.6" quat="0.7 0.7 0 0" fovy="60" />
+        <body name="box" pos="0.2 0.0 0.02">
+            <geom name="box_geom" type="box" size="0.02 0.02 0.02" rgba="0.8 0.2 0.2 1" mass="0.05" />
+            <joint name="box_free" type="free" />
+        </body>
     </worldbody>
 </mujoco>

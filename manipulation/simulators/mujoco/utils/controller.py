@@ -1,8 +1,13 @@
-"""键盘控制器，通过 pynput 监听按键按下/释放，持续控制 SO101 关节。"""
-import numpy as np
-from pynput import keyboard
+"""键盘控制器，通过终端 cbreak 模式非阻塞读取按键，控制 SO101 关节。"""
+import os
+import select
+import sys
+import termios
+import tty
 
-# 按键映射：键名 -> (关节索引, 方向)
+import numpy as np
+
+# 按键映射：字符 -> (关节索引, 方向)
 KEY_MAP = {
     "1": (0, +1), "q": (0, -1),
     "2": (1, +1), "w": (1, -1),
@@ -14,37 +19,34 @@ KEY_MAP = {
 
 
 class KeyboardController:
-    """键盘控制器，监听按键按下/释放状态，持续控制 SO101 六个关节。"""
+    """键盘控制器，非阻塞读取按键，按住时持续控制关节。"""
 
-    def __init__(self, model, joint_step=0.02):
-        """初始化关节指令数组、步进增量和按键监听。"""
-        self.model = model
+    def __init__(self, joint_step=0.02):
+        """初始化关节指令数组和终端设置。"""
         self.joint_step = joint_step
+        self.model = None
+        self.q_cmd = None
+        self._fd = sys.stdin.fileno()
+        self._old_settings = termios.tcgetattr(self._fd)
+        tty.setcbreak(self._fd)
+
+    def set_model(self, model):
+        """设置 MuJoCo 模型，初始化关节指令数组。"""
+        self.model = model
         self.q_cmd = np.zeros(model.nu)
-        self._pressed = set()
-        self._listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release)
-        self._listener.start()
-
-    def _on_press(self, key):
-        """按键按下回调。"""
-        try:
-            self._pressed.add(key.char.lower())
-        except AttributeError:
-            pass
-
-    def _on_release(self, key):
-        """按键释放回调。"""
-        try:
-            self._pressed.discard(key.char.lower())
-        except AttributeError:
-            pass
 
     def update(self):
-        """查询当前按住的键，持续更新关节指令。"""
-        for key, (idx, direction) in KEY_MAP.items():
-            if key in self._pressed:
+        """非阻塞读取按键，更新关节指令，返回非关节键列表。"""
+        hotkeys = []
+        while select.select([sys.stdin], [], [], 0)[0]:
+            ch = os.read(self._fd, 1).decode("utf-8", errors="ignore")
+            if ch in KEY_MAP and self.model is not None:
+                idx, direction = KEY_MAP[ch]
                 self.q_cmd[idx] += direction * self.joint_step
                 self.q_cmd[idx] = np.clip(self.q_cmd[idx], *self.model.actuator_ctrlrange[idx])
+            else:
+                hotkeys.append(ch)
+        return hotkeys
 
     def get_cmd(self):
         """返回当前关节指令的副本。"""
@@ -53,3 +55,7 @@ class KeyboardController:
     def reset(self):
         """重置所有关节指令为零。"""
         self.q_cmd[:] = 0
+
+    def restore(self):
+        """恢复终端设置。"""
+        termios.tcsetattr(self._fd, termios.TCSADRAIN, self._old_settings)

@@ -1,0 +1,31 @@
+simulator_config: ../../simulators/mujoco/config.yaml
+
+camera:
+  name: agentview
+  height: 240
+  width: 320
+
+controller:
+  joint_step: 0.02
+
+dataset:
+  repo_id: so101_act
+  root: ./data/so101_act
+  fps: 20
+  num_episodes: 20
+
+train:
+  device: cuda
+  batch_size: 16
+  num_workers: 4
+  lr: 1.0e-4
+  chunk_size: 10
+  training_steps: 3000
+  log_freq: 100
+  output_dir: ./ckpt/act_so101
+
+eval:
+  device: cuda
+  ckpt_dir: ./ckpt/act_so101
+  temporal_ensemble_coeff: 0.9
+  max_steps: 300

@@ -8,20 +8,19 @@ from utils.controller import KeyboardController
 def main():
     """初始化仿真器和键盘控制器，轮询按键并下发关节指令。"""
     sim = MujocoSimulator("config.yaml")
-    ctrl = KeyboardController(sim.model, joint_step=sim.cfg["controller"]["joint_step"])
+    ctrl = KeyboardController(joint_step=sim.cfg["controller"]["joint_step"])
+    ctrl.set_model(sim.model)
     sim.start()
-    last_time = 0.0
 
-    while sim.is_running():
-        sim.locker.acquire()
-        # 检测 reset（仿真时间倒退归零）
-        if sim.data.time < last_time:
-            ctrl.reset()
-        last_time = sim.data.time
-        ctrl.update()
-        sim.data.ctrl[:] = ctrl.get_cmd()
-        sim.locker.release()
-        time.sleep(0.02)
+    try:
+        while sim.is_running():
+            sim.locker.acquire()
+            ctrl.update()
+            sim.data.ctrl[:] = ctrl.get_cmd()
+            sim.locker.release()
+            time.sleep(0.02)
+    finally:
+        ctrl.restore()
 
     sim.wait()
 

@@ -10,4 +10,4 @@ pynput>=1.7.0
 # isaaclab
 
 # Manipulation - VLA (install separately, see https://github.com/huggingface/lerobot)
-# lerobot
+lerobot
