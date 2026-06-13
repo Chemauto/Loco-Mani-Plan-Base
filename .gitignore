@@ -13,5 +13,4 @@ ckpt/
 .vscode/
 .idea/
 
-# 嵌套 git 仓库
-manipulation/simulators/isaaclab/ManiBase
+
