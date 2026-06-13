@@ -1,8 +1,10 @@
 # Core
 pyyaml>=6.0
+numpy>=1.24.0
 
 # MuJoCo Simulation
 mujoco>=3.0.0
+pynput>=1.7.0
 
 # Isaac Lab Simulation (install separately, see https://isaac-sim.github.io/IsaacLab/)
 # isaaclab

@@ -48,7 +48,7 @@ conda create -n lmp python=3.11 -y
 conda activate lmp
 
 # Install dependencies
-pip install -e .
+pip install -r requirements.txt
 ```
 
 ## 📂 Repository Structure

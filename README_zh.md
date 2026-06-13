@@ -47,7 +47,7 @@ conda create -n lmp python=3.11 -y
 conda activate lmp
 
 # 安装依赖
-pip install -e .
+pip install -r requirements.txt
 ```
 
 ## 📂 仓库结构
