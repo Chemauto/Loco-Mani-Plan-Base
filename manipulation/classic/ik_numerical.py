@@ -6,13 +6,14 @@ import mujoco
 class NumericalIK:
     """通用数值 IK，通过迭代 Jacobian 求解任意机器人的逆运动学。"""
 
-    def __init__(self, model, data, max_iter=100, damping=0.01, tolerance=0.001):
+    def __init__(self, model, data, max_iter=100, damping=0.01, tolerance=0.001, max_step=0.1):
         """初始化 IK 参数。"""
         self.model = model
         self.data = data
         self.max_iter = max_iter
         self.damping = damping
         self.tolerance = tolerance
+        self.max_step = max_step  # 单步关节角增量上限（rad），防止奇异点跳变
 
     def solve(self, target_pos, ee_body_name="gripper", q_init=None):
         """给定目标位置，迭代求解关节角度。
@@ -47,6 +48,12 @@ class NumericalIK:
             dq = jac.T @ np.linalg.solve(
                 jac @ jac.T + self.damping ** 2 * np.eye(3), error
             )
+
+            # 步长裁剪：单步增量超过上限时等比例缩放
+            dq_abs_max = np.abs(dq).max()
+            if dq_abs_max > self.max_step:
+                dq *= self.max_step / dq_abs_max
+
             q = q + dq
             q = np.clip(q, *self.model.actuator_ctrlrange.T)
 

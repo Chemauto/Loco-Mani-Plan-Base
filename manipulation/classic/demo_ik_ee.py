@@ -66,9 +66,8 @@ class IKController:
 
     def _create_ik(self):
         """根据配置创建 IK 求解器。"""
-        method = self.cfg["ik"]["method"]
-        if method == "analytical":
-            return AnalyticalIK(**self.cfg["analytical"])
+        if self.cfg["ik"]["method"] == "analytical":
+            return AnalyticalIK(self.model, self.data, self.ee_body)
         return NumericalIK(self.model, self.data, **self.cfg["numerical"])
 
     def _get_ee_pos(self):
@@ -121,7 +120,7 @@ class IKController:
 
         # 只在目标与当前位置有偏差时才执行 IK
         if self.active and np.linalg.norm(target - ee_pos) > 1e-3:
-            q = self.ik.solve(target) if isinstance(self.ik, AnalyticalIK) else self.ik.solve(target, ee_body_name=self.ee_body)
+            q = self.ik.solve(target, ee_body_name=self.ee_body)
             q[5] = 1.0 if self.gripper_var.get() else 0.0
             self.data.ctrl[:] = q
 
