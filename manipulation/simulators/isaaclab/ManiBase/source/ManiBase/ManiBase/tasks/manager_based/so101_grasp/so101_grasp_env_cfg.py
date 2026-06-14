@@ -149,6 +149,7 @@ class ObservationsCfg:
         def __post_init__(self) -> None:
             self.enable_corruption = False
             self.concatenate_terms = True
+            self.history_length = 3
 
     policy: PolicyCfg = PolicyCfg()
 
