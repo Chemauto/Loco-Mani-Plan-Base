@@ -6,11 +6,6 @@
 
 from isaaclab.utils import configclass
 
-from isaaclab_rl.rsl_rl import (
-    RslRlDistillationAlgorithmCfg,
-    RslRlDistillationStudentTeacherRecurrentCfg,
-)
-
 
 @configclass
 class MLPActorCfg:
@@ -84,6 +79,52 @@ class So101PlacePPORunnerCfg:
     algorithm = PPOAlgorithmCfg()
 
 
+@configclass
+class StudentModelCfg:
+    """student 网络配置（MLP，处理图像特征观测）/ Student network config."""
+
+    class_name = "MLPModel"
+    hidden_dims = [512, 256, 128]
+    activation = "elu"
+    obs_normalization = True
+    distribution_cfg = {
+        "class_name": "GaussianDistribution",
+        "init_std": 0.1,
+        "std_type": "scalar",
+    }
+
+
+@configclass
+class TeacherModelCfg:
+    """teacher 网络配置（MLP，处理状态观测）/ Teacher network config.
+
+    注意 / Note: distribution_cfg 必须与 teacher 训练时的 MLPActorCfg 一致
+    （init_std=0.8），否则 load_state_dict 会因 distribution.std_param key 不匹配而失败。
+    """
+
+    class_name = "MLPModel"
+    hidden_dims = [256, 128, 64]
+    activation = "elu"
+    obs_normalization = True
+    distribution_cfg = {
+        "class_name": "GaussianDistribution",
+        "init_std": 0.8,
+        "std_type": "scalar",
+    }
+
+
+@configclass
+class DistillationAlgorithmCfg:
+    """蒸馏算法配置 / Distillation algorithm config."""
+
+    class_name = "Distillation"
+    num_learning_epochs = 5
+    learning_rate = 1e-3
+    gradient_length = 5 * (2048 / 16)
+    optimizer = "adam"
+    loss_type = "mse"
+
+
 #########################
 # Student Distillation ##  teacher→student 蒸馏
 #########################
@@ -94,8 +135,12 @@ class So101PlaceDistillationRunnerCfg(So101PlacePPORunnerCfg):
     """SO101 抓取→放置 teacher→student 蒸馏配置。
 
     逻辑 / Logic:
-        teacher（状态策略，看 teacher 观测组）实时推理，student（图像策略，看 policy 观测组）
+        teacher（状态策略，看 teacher 观测组）实时推理，student（图像策略，看 student 观测组）
         用 MSE 行为克隆模仿 teacher 动作。teacher checkpoint 自动从 logs/rsl_rl/so101_place/ 加载。
+
+    注意 / Note:
+        my_rsl_rl 的 DistillationRunner.construct_algorithm 期望 cfg 有独立的 "student" 和 "teacher"
+        顶层 dict（各含 class_name），obs_groups 需有 "student" 和 "teacher" key。
     """
 
     num_steps_per_env = 24
@@ -106,30 +151,12 @@ class So101PlaceDistillationRunnerCfg(So101PlacePPORunnerCfg):
     experiment_name = "so101_place"
     run_name = "distillation"
 
+    # my_rsl_rl DistillationRunner 期望 obs_groups 有 "student" 和 "teacher" key
     obs_groups = {
-        "policy": ["policy"],     # student（本体感觉 + 双 ResNet 特征，无 ee_to_cube）
-        "teacher": ["teacher"],   # teacher（本体感觉 + ee_to_cube 特权）
-        "critic": ["critic"],     # critic（ground-truth 特权）
+        "student": ["policy"],    # student 看 policy 观测组（图像+本体感觉）
+        "teacher": ["teacher"],   # teacher 看 teacher 观测组（状态+特权）
     }
 
-    policy = RslRlDistillationStudentTeacherRecurrentCfg(
-        student_hidden_dims=[512, 256, 128],
-        teacher_hidden_dims=[256, 128, 64],
-        teacher_obs_normalization=True,
-        student_obs_normalization=True,
-        activation="elu",
-        init_noise_std=0.1,
-        class_name="StudentTeacherRecurrent",
-        rnn_type="lstm",
-        rnn_hidden_dim=256,
-        rnn_num_layers=3,
-        teacher_recurrent=False,
-    )
-
-    algorithm = RslRlDistillationAlgorithmCfg(
-        num_learning_epochs=5,
-        learning_rate=1e-3,
-        gradient_length=5 * (2048 / 16),
-        optimizer="adam",
-        loss_type="mse",
-    )
+    student = StudentModelCfg()
+    teacher = TeacherModelCfg()
+    algorithm = DistillationAlgorithmCfg()

@@ -383,6 +383,11 @@ class So101PlaceEnvCfg(ManagerBasedRLEnvCfg):
     curriculum: CurriculumCfg = CurriculumCfg()
 
     def __post_init__(self) -> None:
+        # 禁用 DLSS（分辨率 224 低于 DLSS 最小要求 300，非 headless 下会导致渲染失败）/ disable DLSS
+        import carb.settings
+        _carb_settings = carb.settings.get_settings()
+        _carb_settings.set("/rtx/post/dlss/enabled", False)
+
         self.decimation = _EPISODE_CFG["decimation"]
         self.episode_length_s = _EPISODE_CFG["length_s"]
         self.viewer.eye = (0.65, -0.9, 0.65)

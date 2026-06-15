@@ -208,8 +208,10 @@ class Distillation:
         if load_cfg.get("student"):
             self._raw_student.load_state_dict(loaded_dict["student_state_dict"], strict=strict)
         if load_cfg.get("teacher"):
+            # teacher 用 strict=False：teacher 训练的 actor checkpoint 含 distribution 参数，
+            # 但蒸馏的 teacher model 用 deterministic output（无 distribution），忽略多余 key
             self._raw_teacher.load_state_dict(
-                loaded_dict.get("teacher_state_dict") or loaded_dict["actor_state_dict"], strict=strict
+                loaded_dict.get("teacher_state_dict") or loaded_dict["actor_state_dict"], strict=False
             )
             self.teacher_loaded = True
         if load_cfg.get("optimizer"):
