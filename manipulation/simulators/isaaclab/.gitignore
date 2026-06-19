@@ -1,0 +1,6 @@
+# IsaacLab 训练输出与日志
+outputs/
+logs/
+manipulation/simulators/isaaclab/outputs/
+# 训练临时文件
+*.tmp

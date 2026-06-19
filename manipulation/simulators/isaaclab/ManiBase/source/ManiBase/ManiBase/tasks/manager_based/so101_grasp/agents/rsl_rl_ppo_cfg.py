@@ -6,7 +6,7 @@ from isaaclab.utils import configclass
 @configclass
 class MLPActorCfg:
     class_name = "MLPModel"
-    hidden_dims = [256, 128, 64]
+    hidden_dims = [256, 256, 128]
     activation = "elu"
     obs_normalization = True
     distribution_cfg = {
@@ -19,7 +19,7 @@ class MLPActorCfg:
 @configclass
 class MLPCriticCfg:
     class_name = "MLPModel"
-    hidden_dims = [256, 128, 64]
+    hidden_dims = [256, 256, 128]
     activation = "elu"
     obs_normalization = True
     distribution_cfg = None
@@ -65,7 +65,7 @@ class So101GraspPPORunnerCfg:
     torch_compile_mode = None
     obs_groups = {
         "actor": ["policy"],
-        "critic": ["policy"],
+        "critic": ["critic"],
     }
     actor = MLPActorCfg()
     critic = MLPCriticCfg()

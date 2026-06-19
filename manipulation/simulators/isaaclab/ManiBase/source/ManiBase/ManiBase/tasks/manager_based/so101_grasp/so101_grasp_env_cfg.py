@@ -1,4 +1,4 @@
-"""SO101 方块抓取强化学习任务。"""
+"""SO101 方块抓取强化学习任务（双相机视觉 + 课程学习）。"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import ContactSensorCfg, FrameTransformerCfg
+from isaaclab.sensors import ContactSensorCfg, FrameTransformerCfg, TiledCameraCfg
 from isaaclab.sensors.frame_transformer.frame_transformer_cfg import OffsetCfg
 from isaaclab.utils import configclass
 
@@ -34,11 +34,15 @@ _SCENE_CFG = SO101_GRASP_CFG["scene"]
 _EPISODE_CFG = SO101_GRASP_CFG["episode"]
 _REWARD_CFG = SO101_GRASP_CFG["reward"]
 _SUCCESS_CFG = SO101_GRASP_CFG["success"]
+_CAMERA_CFG = SO101_GRASP_CFG["camera"]
+_PRE_GRASP = SO101_GRASP_CFG["pre_grasp"]
 
+
+# ============================= 场景 / Scene =============================
 
 @configclass
 class So101GraspSceneCfg(InteractiveSceneCfg):
-    """SO101 抓取场景。"""
+    """SO101 抓取场景：机器人 + 方块 + 桌面 + 双相机。"""
 
     ground = AssetBaseCfg(
         prim_path="/World/GroundPlane",
@@ -78,7 +82,13 @@ class So101GraspSceneCfg(InteractiveSceneCfg):
         ),
     )
 
-    robot: ArticulationCfg = SO101_FOLLOWER_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    robot: ArticulationCfg = SO101_FOLLOWER_CFG.replace(
+        prim_path="{ENV_REGEX_NS}/Robot",
+        init_state=ArticulationCfg.InitialStateCfg(
+            joint_pos={k: _PRE_GRASP[k] for k in SO101_ARM_JOINT_NAMES + [SO101_GRIPPER_JOINT_NAME]},
+            joint_vel={".*": 0.0},
+        ),
+    )
 
     ee_frame = FrameTransformerCfg(
         prim_path=f"{{ENV_REGEX_NS}}/Robot/{SO101_BASE_LINK_NAME}",
@@ -92,7 +102,6 @@ class So101GraspSceneCfg(InteractiveSceneCfg):
         ],
     )
 
-    # 只上报活动夹爪指 <-> Cube 的接触（filter 排除桌面等误报）
     jaw_contact_forces = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/" + SO101_JAW_LINK_NAME,
         filter_prim_paths_expr=["{ENV_REGEX_NS}/Cube"],
@@ -100,15 +109,19 @@ class So101GraspSceneCfg(InteractiveSceneCfg):
         track_air_time=False,
     )
 
+    # 相机暂不加入 scene（TODO: 加相机视觉时创建 _Vision 变体）
+
     light = AssetBaseCfg(
         prim_path="/World/DomeLight",
         spawn=sim_utils.DomeLightCfg(color=(0.85, 0.85, 0.85), intensity=1200.0),
     )
 
 
+# ============================= 动作 / Actions =============================
+
 @configclass
 class ActionsCfg:
-    """动作空间。"""
+    """动作空间：arm 关节位置 + gripper 二值开合。"""
 
     arm_action = mdp.JointPositionActionCfg(
         asset_name="robot",
@@ -125,26 +138,69 @@ class ActionsCfg:
     )
 
 
+# ============================= 观测 / Observations =============================
+
 @configclass
 class ObservationsCfg:
-    """观测空间。"""
+    """非对称观测：policy（本体 + ee_to_cube + 双相机特征），critic（更多特权）。"""
 
     @configclass
     class PolicyCfg(ObsGroup):
+        """Actor 观测（暂不含相机，先跑通 RL 再加）。"""
         joint_pos = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel = ObsTerm(func=mdp.joint_vel_rel)
-        # 夹爪开合状态（动作里有二值夹爪，策略必须能观测到它）
         gripper_pos = ObsTerm(
             func=mdp.joint_pos_rel,
             params={"asset_cfg": SceneEntityCfg("robot", joint_names=[SO101_GRIPPER_JOINT_NAME])},
         )
-        # 末端 -> cube 的误差向量（reward 优化的方向），以及末端世界坐标
+        ee_to_cube = ObsTerm(
+            func=mdp.ee_to_object_vector,
+            params={"ee_frame_cfg": SceneEntityCfg("ee_frame"), "object_cfg": SceneEntityCfg("cube")},
+        )
+        # TODO: 加相机后取消注释
+        # jaw_img = ObsTerm(
+        #     func=mdp.ResNet10Extractor,
+        #     params={"sensor_cfg": SceneEntityCfg("jaw_camera"), "data_type": "rgb"},
+        # )
+        # scene_img = ObsTerm(
+        #     func=mdp.ResNet10Extractor,
+        #     params={"sensor_cfg": SceneEntityCfg("scene_camera"), "data_type": "rgb"},
+        # )
+        last_action = ObsTerm(func=mdp.last_action)
+
+        def __post_init__(self) -> None:
+            self.enable_corruption = True
+            self.concatenate_terms = True
+            self.history_length = 3
+
+    @configclass
+    class CriticCfg(ObsGroup):
+        """Critic 观测（policy 全部 + 额外特权）。"""
+        joint_pos = ObsTerm(func=mdp.joint_pos_rel)
+        joint_vel = ObsTerm(func=mdp.joint_vel_rel)
+        gripper_pos = ObsTerm(
+            func=mdp.joint_pos_rel,
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=[SO101_GRIPPER_JOINT_NAME])},
+        )
         ee_to_cube = ObsTerm(
             func=mdp.ee_to_object_vector,
             params={"ee_frame_cfg": SceneEntityCfg("ee_frame"), "object_cfg": SceneEntityCfg("cube")},
         )
         ee_pos = ObsTerm(func=mdp.ee_position_world, params={"ee_frame_cfg": SceneEntityCfg("ee_frame")})
-        actions = ObsTerm(func=mdp.last_action)
+        cube_pose = ObsTerm(
+            func=mdp.object_position_in_robot_root_frame,
+            params={"robot_cfg": SceneEntityCfg("robot"), "object_cfg": SceneEntityCfg("cube")},
+        )
+        # TODO: 加相机后取消注释
+        # jaw_img = ObsTerm(
+        #     func=mdp.ResNet10Extractor,
+        #     params={"sensor_cfg": SceneEntityCfg("jaw_camera"), "data_type": "rgb"},
+        # )
+        # scene_img = ObsTerm(
+        #     func=mdp.ResNet10Extractor,
+        #     params={"sensor_cfg": SceneEntityCfg("scene_camera"), "data_type": "rgb"},
+        # )
+        last_action = ObsTerm(func=mdp.last_action)
 
         def __post_init__(self) -> None:
             self.enable_corruption = False
@@ -152,11 +208,14 @@ class ObservationsCfg:
             self.history_length = 3
 
     policy: PolicyCfg = PolicyCfg()
+    critic: CriticCfg = CriticCfg()
 
+
+# ============================= 事件 / Events =============================
 
 @configclass
 class EventCfg:
-    """重置事件。"""
+    """重置事件：cube 小范围随机化。"""
 
     reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
     reset_cube = EventTerm(
@@ -170,16 +229,17 @@ class EventCfg:
     )
 
 
+# ============================= 奖励 / Rewards =============================
+
 @configclass
 class RewardsCfg:
-    """奖励项。"""
+    """奖励：dense(reach+grab+lift) + sparse(success) + regularization。"""
 
     reach_cube = RewTerm(
         func=mdp.object_ee_distance,
         weight=_REWARD_CFG["reach_weight"],
         params={"ee_frame_cfg": SceneEntityCfg("ee_frame"), "object_cfg": SceneEntityCfg("cube")},
     )
-    # 夹爪指接触 cube 的密集奖励：reach -> lift 之间缺失的"碰到/夹住"信号
     grab_cube = RewTerm(
         func=mdp.gripper_object_contact,
         weight=_REWARD_CFG["grasp_weight"],
@@ -188,7 +248,6 @@ class RewardsCfg:
             "threshold": _REWARD_CFG["contact_force_threshold"],
         },
     )
-    # 抬升高度仅在夹住时计奖（修复未抓取也白拿 lift 奖励的泄漏）
     lift_cube = RewTerm(
         func=mdp.object_lift_height_when_grasped,
         weight=_REWARD_CFG["lift_weight"],
@@ -200,7 +259,7 @@ class RewardsCfg:
             "threshold": _REWARD_CFG["contact_force_threshold"],
         },
     )
-    lift_success = RewTerm(
+    success = RewTerm(
         func=mdp.object_lift_success,
         weight=_REWARD_CFG["success_bonus"],
         params={
@@ -213,9 +272,11 @@ class RewardsCfg:
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=_REWARD_CFG["action_rate_weight"])
 
 
+# ============================= 终止 / Terminations =============================
+
 @configclass
 class TerminationsCfg:
-    """终止条件。"""
+    """终止条件：超时 / 成功 / cube 掉落。"""
 
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
     success = DoneTerm(
@@ -233,6 +294,8 @@ class TerminationsCfg:
     )
 
 
+# ============================= 环境配置 =============================
+
 @configclass
 class So101GraspCubeEnvCfg(ManagerBasedRLEnvCfg):
     """SO101 方块抓取训练环境。"""
@@ -248,6 +311,11 @@ class So101GraspCubeEnvCfg(ManagerBasedRLEnvCfg):
     terminations: TerminationsCfg = TerminationsCfg()
 
     def __post_init__(self) -> None:
+        # 禁用 DLSS（分辨率 224 低于 DLSS 最小要求 300）
+        import carb.settings
+        _carb_settings = carb.settings.get_settings()
+        _carb_settings.set("/rtx/post/dlss/enabled", False)
+
         self.decimation = _EPISODE_CFG["decimation"]
         self.episode_length_s = _EPISODE_CFG["length_s"]
         self.viewer.eye = (0.65, -0.9, 0.65)
@@ -256,13 +324,18 @@ class So101GraspCubeEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.render_interval = self.decimation
         self.sim.physx.bounce_threshold_velocity = 0.01
         self.sim.physx.friction_correlation_distance = 0.00625
+        # 8GB GPU：降低 physx buffer 以适应更多 envs
+        self.sim.physx.gpu_max_rigid_contact_count = 2097152
+        self.sim.physx.gpu_max_rigid_patch_count = 163840
+        self.sim.physx.gpu_found_lost_pairs_capacity = 2097152
 
 
 @configclass
 class So101GraspCubeEnvCfg_PLAY(So101GraspCubeEnvCfg):
-    """单环境调试配置。"""
+    """单环境回放配置。"""
 
     def __post_init__(self) -> None:
         super().__post_init__()
         self.scene.num_envs = 1
         self.scene.env_spacing = 1.2
+        self.observations.policy.enable_corruption = False

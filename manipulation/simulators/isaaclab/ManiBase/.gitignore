@@ -66,3 +66,7 @@ _build
 
 # Docker history
 .isaac-lab-docker-history
+
+# IsaacLab outputs & logs（在 isaaclab 目录下，不在 ManiBase 子模块内）
+outputs/
+logs/
