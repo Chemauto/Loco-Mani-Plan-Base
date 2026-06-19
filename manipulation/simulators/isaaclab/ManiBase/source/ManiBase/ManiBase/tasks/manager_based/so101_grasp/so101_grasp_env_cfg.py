@@ -1,4 +1,4 @@
-"""SO101 方块抓取强化学习任务（双相机视觉 + 课程学习）。"""
+"""SO101 方块抓取强化学习任务（纯状态版，相机待后续加入）。"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import ContactSensorCfg, FrameTransformerCfg, TiledCameraCfg
+from isaaclab.sensors import ContactSensorCfg, FrameTransformerCfg
 from isaaclab.sensors.frame_transformer.frame_transformer_cfg import OffsetCfg
 from isaaclab.utils import configclass
 
@@ -34,7 +34,6 @@ _SCENE_CFG = SO101_GRASP_CFG["scene"]
 _EPISODE_CFG = SO101_GRASP_CFG["episode"]
 _REWARD_CFG = SO101_GRASP_CFG["reward"]
 _SUCCESS_CFG = SO101_GRASP_CFG["success"]
-_CAMERA_CFG = SO101_GRASP_CFG["camera"]
 _PRE_GRASP = SO101_GRASP_CFG["pre_grasp"]
 
 
@@ -42,7 +41,7 @@ _PRE_GRASP = SO101_GRASP_CFG["pre_grasp"]
 
 @configclass
 class So101GraspSceneCfg(InteractiveSceneCfg):
-    """SO101 抓取场景：机器人 + 方块 + 桌面 + 双相机。"""
+    """SO101 抓取场景。"""
 
     ground = AssetBaseCfg(
         prim_path="/World/GroundPlane",
@@ -85,6 +84,8 @@ class So101GraspSceneCfg(InteractiveSceneCfg):
     robot: ArticulationCfg = SO101_FOLLOWER_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot",
         init_state=ArticulationCfg.InitialStateCfg(
+            pos=(0.0, -0.25, 0.26),
+            rot=(1.0, 0.0, 0.0, 0.0),
             joint_pos={k: _PRE_GRASP[k] for k in SO101_ARM_JOINT_NAMES + [SO101_GRIPPER_JOINT_NAME]},
             joint_vel={".*": 0.0},
         ),
@@ -109,7 +110,9 @@ class So101GraspSceneCfg(InteractiveSceneCfg):
         track_air_time=False,
     )
 
-    # 相机暂不加入 scene（TODO: 加相机视觉时创建 _Vision 变体）
+    # TODO: 相机（DLSS + TiledCamera prim_path 问题待解决）
+    # jaw_camera: TiledCameraCfg = TiledCameraCfg(...)
+    # scene_camera: TiledCameraCfg = TiledCameraCfg(...)
 
     light = AssetBaseCfg(
         prim_path="/World/DomeLight",
@@ -142,11 +145,11 @@ class ActionsCfg:
 
 @configclass
 class ObservationsCfg:
-    """非对称观测：policy（本体 + ee_to_cube + 双相机特征），critic（更多特权）。"""
+    """非对称观测：policy（本体 + ee_to_cube），critic（更多特权）。"""
 
     @configclass
     class PolicyCfg(ObsGroup):
-        """Actor 观测（暂不含相机，先跑通 RL 再加）。"""
+        """Actor 观测。"""
         joint_pos = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel = ObsTerm(func=mdp.joint_vel_rel)
         gripper_pos = ObsTerm(
@@ -157,15 +160,6 @@ class ObservationsCfg:
             func=mdp.ee_to_object_vector,
             params={"ee_frame_cfg": SceneEntityCfg("ee_frame"), "object_cfg": SceneEntityCfg("cube")},
         )
-        # TODO: 加相机后取消注释
-        # jaw_img = ObsTerm(
-        #     func=mdp.ResNet10Extractor,
-        #     params={"sensor_cfg": SceneEntityCfg("jaw_camera"), "data_type": "rgb"},
-        # )
-        # scene_img = ObsTerm(
-        #     func=mdp.ResNet10Extractor,
-        #     params={"sensor_cfg": SceneEntityCfg("scene_camera"), "data_type": "rgb"},
-        # )
         last_action = ObsTerm(func=mdp.last_action)
 
         def __post_init__(self) -> None:
@@ -191,15 +185,6 @@ class ObservationsCfg:
             func=mdp.object_position_in_robot_root_frame,
             params={"robot_cfg": SceneEntityCfg("robot"), "object_cfg": SceneEntityCfg("cube")},
         )
-        # TODO: 加相机后取消注释
-        # jaw_img = ObsTerm(
-        #     func=mdp.ResNet10Extractor,
-        #     params={"sensor_cfg": SceneEntityCfg("jaw_camera"), "data_type": "rgb"},
-        # )
-        # scene_img = ObsTerm(
-        #     func=mdp.ResNet10Extractor,
-        #     params={"sensor_cfg": SceneEntityCfg("scene_camera"), "data_type": "rgb"},
-        # )
         last_action = ObsTerm(func=mdp.last_action)
 
         def __post_init__(self) -> None:
@@ -311,11 +296,6 @@ class So101GraspCubeEnvCfg(ManagerBasedRLEnvCfg):
     terminations: TerminationsCfg = TerminationsCfg()
 
     def __post_init__(self) -> None:
-        # 禁用 DLSS（分辨率 224 低于 DLSS 最小要求 300）
-        import carb.settings
-        _carb_settings = carb.settings.get_settings()
-        _carb_settings.set("/rtx/post/dlss/enabled", False)
-
         self.decimation = _EPISODE_CFG["decimation"]
         self.episode_length_s = _EPISODE_CFG["length_s"]
         self.viewer.eye = (0.65, -0.9, 0.65)
@@ -324,7 +304,6 @@ class So101GraspCubeEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.render_interval = self.decimation
         self.sim.physx.bounce_threshold_velocity = 0.01
         self.sim.physx.friction_correlation_distance = 0.00625
-        # 8GB GPU：降低 physx buffer 以适应更多 envs
         self.sim.physx.gpu_max_rigid_contact_count = 2097152
         self.sim.physx.gpu_max_rigid_patch_count = 163840
         self.sim.physx.gpu_found_lost_pairs_capacity = 2097152

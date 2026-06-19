@@ -12,7 +12,7 @@ _ISAACLAB_DIR = Path(__file__).resolve().parents[7]
 _CONFIG_PATH = _ISAACLAB_DIR / "config.yaml"
 
 _DEFAULT_CFG: dict[str, Any] = {
-    "scene": {"num_envs": 1024, "env_spacing": 1.2},
+    "scene": {"num_envs": 256, "env_spacing": 1.2},
     "cube": {"size": 0.035, "mass": 0.05, "initial_pos": [0.18, 0.0, 0.2975]},
     "table": {"size": [0.45, 0.60, 0.04], "pos": [0.16, 0.0, 0.255]},
     "episode": {"length_s": 6.0, "decimation": 2, "sim_dt": 0.01},
