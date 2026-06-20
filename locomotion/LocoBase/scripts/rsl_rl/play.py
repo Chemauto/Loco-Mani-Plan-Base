@@ -156,8 +156,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         # version 2.3 onwards
         policy_nn = runner.alg.policy
     except AttributeError:
-        # version 2.2 and below
-        policy_nn = runner.alg.actor_critic
+        try:
+            # rsl-rl 5.x
+            policy_nn = runner.alg.get_policy()
+        except AttributeError:
+            # version 2.2 and below
+            policy_nn = runner.alg.actor_critic
 
     # extract the normalizer
     if hasattr(policy_nn, "actor_obs_normalizer"):
@@ -169,8 +173,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # export policy to onnx/jit
     export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
-    export_policy_as_jit(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.pt")
-    export_policy_as_onnx(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.onnx")
+    if hasattr(policy_nn, "as_jit") and hasattr(runner, "export_policy_to_jit"):
+        runner.export_policy_to_jit(export_model_dir, filename="policy.pt")
+        runner.export_policy_to_onnx(export_model_dir, filename="policy.onnx")
+    else:
+        export_policy_as_jit(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.pt")
+        export_policy_as_onnx(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.onnx")
 
     dt = env.unwrapped.step_dt
 
